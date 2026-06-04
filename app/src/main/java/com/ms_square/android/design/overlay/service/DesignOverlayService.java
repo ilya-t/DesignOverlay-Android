@@ -335,11 +335,16 @@ public class DesignOverlayService extends Service {
         int windowType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY;
+        int flags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        if (isFullScreen) {
+            flags |= WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
+        }
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 windowType,
-                isFullScreen ? WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN : 0,
+                flags,
                 PixelFormat.TRANSLUCENT);
         params.format = PixelFormat.RGBA_8888;
         return params;
