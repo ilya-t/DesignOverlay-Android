@@ -1,6 +1,4 @@
 apply plugin: 'com.android.application'
-apply plugin: 'android-apt'
-apply plugin: 'saucelabs'
 
 configurations.all {
     // check for updates every build for changing modules
@@ -8,8 +6,17 @@ configurations.all {
 }
 
 android {
+    namespace "com.ms_square.android.design.overlay"
     compileSdkVersion project.ANDROID_BUILD_SDK_VERSION
-    buildToolsVersion project.ANDROID_BUILD_TOOLS_VERSION
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
 
     //  Gets the revision number from the Git
     def getRevision = { ->
@@ -52,7 +59,6 @@ android {
         debug {
             buildConfigField "String", "BUILD_NUMBER", "\"" + getRevision() + "\""
 
-            zipAlignEnabled true
             minifyEnabled false
         }
         release {
@@ -67,41 +73,20 @@ android {
             }
         }
     }
-
-    sauceLabsConfig {
-        testCommand "py.test -s appium/android_sauce_labs.py"
-    }
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    compile project(":ColorPickerPreference")
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
 
     // Support libraries
-    compile "com.android.support:support-v4:${supportPackageVersion}"
-    compile "com.android.support:appcompat-v7:${supportPackageVersion}"
+    implementation "com.android.support:support-v4:${supportPackageVersion}"
+    implementation "com.android.support:appcompat-v7:${supportPackageVersion}"
     // to support annotations such as @NonNull
-    compile "com.android.support:support-annotations:${supportPackageVersion}"
-
-    // Android Annotaions Library
-    compile "org.androidannotations:androidannotations-api:${project.androidAnnotationsVersion}"
-    apt "org.androidannotations:androidannotations:${project.androidAnnotationsVersion}"
+    implementation "com.android.support:support-annotations:${supportPackageVersion}"
 
     // EventBus
-    compile "de.greenrobot:eventbus:${project.eventBusVersion}"
+    implementation "de.greenrobot:eventbus:${project.eventBusVersion}"
 
     // Timber for logging
-    compile "com.jakewharton.timber:timber:${project.timberVersion}"
-
-    // Android Utility Library
-    compile "com.ms-square:android-util:${project.androidUtilVersion}"
-}
-
-// for Android Annotations
-apt {
-    arguments {
-        androidManifestFile variant.outputs[0].processResources.manifestFile
-        // to use android product flavors to change packageName
-        resourcePackageName android.defaultConfig.applicationId
-    }
+    implementation "com.jakewharton.timber:timber:${project.timberVersion}"
 }

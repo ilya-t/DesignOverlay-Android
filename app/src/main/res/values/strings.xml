@@ -37,4 +37,8 @@
     <string name="intent_chooser_choose_image">Choose an image to overlay</string>
 
     <string name="toast_bitmap_not_found">Error! Could not retrieve image.</string>
+    <string name="toast_overlay_permission_required">Allow display over other apps to start the overlay.</string>
+
+    <string name="dialog_color_picker">Color Picker</string>
+    <string name="press_color_to_apply">Press on Color to apply</string>
 </resources>

@@ -1,11 +1,11 @@
 package com.ms_square.android.design.overlay.activity.base;
 
 import android.os.Bundle;
-import android.support.v7.app.ActionBarActivity;
+import android.support.v7.app.AppCompatActivity;
 
 import de.greenrobot.event.EventBus;
 
-public abstract class BaseActivity extends ActionBarActivity {
+public abstract class BaseActivity extends AppCompatActivity {
 
     private boolean mVisible;
     private boolean mStopped;

@@ -60,7 +60,6 @@ How to build
 -------------
 
 ```
-git submodule update --init
 ./gradlew assembleDebug
 ```
 

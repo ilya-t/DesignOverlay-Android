@@ -1,6 +1,7 @@
 package com.ms_square.android.design.overlay.service;
 
 import android.annotation.TargetApi;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -16,6 +17,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.support.v4.app.NotificationCompat;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -38,6 +40,8 @@ public class DesignOverlayService extends Service {
 
     private static final int NOTIFICATION_ID = 10000;
 
+    private static final String NOTIFICATION_CHANNEL_ID = "design_overlay";
+
     private static final String ACTION_DISMISS = "com.ms_square.android.design.overlay.ACTION_DISMISS";
 
     private WindowManager mWindowManager;
@@ -50,13 +54,26 @@ public class DesignOverlayService extends Service {
 
     private GridView mGridView;
 
+    private boolean mReceiverRegistered;
+
+    private boolean mPreferenceListenerRegistered;
+
     public static Intent createIntent(Context context) {
         return new Intent(context, DesignOverlayService.class);
+    }
+
+    public static boolean canDrawOverlays(Context context) {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
+
+        if (!canDrawOverlays(this)) {
+            stopSelf();
+            return;
+        }
 
         AppEnvironment.INSTANCE.setOverlayServiceRunning(true);
 
@@ -64,11 +81,16 @@ public class DesignOverlayService extends Service {
 
         mWindowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
 
-        showOverlay();
+        if (!showOverlay()) {
+            stopSelf();
+            return;
+        }
 
         registerReceiver(mReceiver, new IntentFilter(ACTION_DISMISS));
+        mReceiverRegistered = true;
 
         PrefUtil.registerOnSharedPreferenceChangeListener(this, mPrefListener);
+        mPreferenceListenerRegistered = true;
 
         showNotification();
     }
@@ -81,8 +103,12 @@ public class DesignOverlayService extends Service {
     @Override
     public void onDestroy() {
         AppEnvironment.INSTANCE.setOverlayServiceRunning(false);
-        PrefUtil.unregisterOnSharedPreferenceChangeListener(this, mPrefListener);
-        unregisterReceiver(mReceiver);
+        if (mPreferenceListenerRegistered) {
+            PrefUtil.unregisterOnSharedPreferenceChangeListener(this, mPrefListener);
+        }
+        if (mReceiverRegistered) {
+            unregisterReceiver(mReceiver);
+        }
         dismissOverlay();
         cancelNotification();
         super.onDestroy();
@@ -93,7 +119,7 @@ public class DesignOverlayService extends Service {
         return null;
     }
 
-    private void showOverlay() {
+    private boolean showOverlay() {
         mRootView = LayoutInflater.from(this).inflate(R.layout.service_design_overlay, null, false);
         mDesignImgView = (ImageView) mRootView.findViewById(R.id.design_image_view);
         mGridView = (GridView) mRootView.findViewById(R.id.grid_view);
@@ -103,11 +129,22 @@ public class DesignOverlayService extends Service {
         updateGridSize();
         updateGridColor();
         updateGridVisibility();
-        mWindowManager.addView(mRootView, createDefaultSystemWindowParams(PrefUtil.isFullScreen(this)));
+        try {
+            mWindowManager.addView(mRootView, createDefaultSystemWindowParams(PrefUtil.isFullScreen(this)));
+            return true;
+        } catch (RuntimeException e) {
+            Timber.w("Unable to add overlay window: %s", e.toString());
+            mRootView = null;
+            mDesignImgView = null;
+            mGridView = null;
+            return false;
+        }
     }
 
     private void dismissOverlay() {
-        mWindowManager.removeView(mRootView);
+        if (mRootView != null) {
+            mWindowManager.removeView(mRootView);
+        }
         mRootView = null;
         mDesignImgView = null;
         mGridView = null;
@@ -194,7 +231,9 @@ public class DesignOverlayService extends Service {
     }
 
     private void showNotification() {
-        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this)
+        createNotificationChannel();
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(getString(R.string.notification_big_text)))
                 .setSmallIcon(R.drawable.ic_notification)
                 .setOngoing(true)
@@ -210,7 +249,17 @@ public class DesignOverlayService extends Service {
     }
 
     private void cancelNotification() {
-        mNotificationManager.cancel(NOTIFICATION_ID);
+        if (mNotificationManager != null) {
+            mNotificationManager.cancel(NOTIFICATION_ID);
+        }
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(NOTIFICATION_CHANNEL_ID,
+                    getString(R.string.notification_title), NotificationManager.IMPORTANCE_LOW);
+            mNotificationManager.createNotificationChannel(channel);
+        }
     }
 
     private PendingIntent getNotificationIntent(String action) {
@@ -241,7 +290,9 @@ public class DesignOverlayService extends Service {
             switch (key) {
                 case PrefUtil.PREF_FULLSCREEN: {
                     dismissOverlay();
-                    showOverlay();
+                    if (!showOverlay()) {
+                        stopSelf();
+                    }
                     break;
                 }
                 case PrefUtil.PREF_DESIGN_IMAGE_ENABLED: {
@@ -281,10 +332,13 @@ public class DesignOverlayService extends Service {
     };
 
     private static WindowManager.LayoutParams createDefaultSystemWindowParams(boolean isFullScreen) {
+        int windowType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY;
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY,
+                windowType,
                 isFullScreen ? WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN : 0,
                 PixelFormat.TRANSLUCENT);
         params.format = PixelFormat.RGBA_8888;
